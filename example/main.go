@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/abiosoft/ishell"
 	"github.com/fatih/color"
+	"github.com/red-chen/ishell"
 )
 
 func main() {
-	shell := ishell.New()
+	shell := ishell.New("Sample")
 
 	// display info.
 	shell.Println("Sample Interactive Shell")

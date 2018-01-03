@@ -33,6 +33,7 @@ var (
 
 // Shell is an interactive cli shell.
 type Shell struct {
+	Name              string
 	rootCmd           *Cmd
 	generic           func(*Context)
 	interrupt         func(*Context, int, string)
@@ -55,18 +56,19 @@ type Shell struct {
 }
 
 // New creates a new shell with default settings. Uses standard output and default prompt ">> ".
-func New() *Shell {
-	return NewWithConfig(&readline.Config{Prompt: defaultPrompt})
+func New(name string) *Shell {
+	return NewWithConfig(name, &readline.Config{Prompt: defaultPrompt})
 }
 
 // NewWithConfig creates a new shell with custom readline config.
-func NewWithConfig(conf *readline.Config) *Shell {
+func NewWithConfig(name string, conf *readline.Config) *Shell {
 	rl, err := readline.NewEx(conf)
 	if err != nil {
 		log.Println("Shell or operating system not supported.")
 		log.Fatal(err)
 	}
 	shell := &Shell{
+		Name:    name,
 		rootCmd: &Cmd{},
 		reader: &shellReader{
 			scanner:     rl,
@@ -81,8 +83,14 @@ func NewWithConfig(conf *readline.Config) *Shell {
 	}
 	shell.Actions = &shellActionsImpl{Shell: shell}
 	shell.progressBar = newProgressBar(shell)
+	shell.rootCmd.Name = name
+	shell.rootCmd.Root = shell
 	addDefaultFuncs(shell)
 	return shell
+}
+
+func (s *Shell) Prompt(prompt string) {
+	s.reader.prompt = prompt
 }
 
 // Start starts the shell but does not wait for it to stop.
@@ -245,6 +253,13 @@ func (s *Shell) handleCommand(str []string) (bool, error) {
 		return true, nil
 	}
 	c := newContext(s, cmd, args)
+
+	err := cmd.ParseFlags(args)
+	if err != nil {
+		c.Err(err)
+		return true, c.err
+	}
+
 	cmd.Func(c)
 	return true, c.err
 }
@@ -346,6 +361,7 @@ func (s *Shell) CustomCompleter(completer readline.AutoCompleter) {
 // AddCmd adds a new command handler.
 // This only adds top level commands.
 func (s *Shell) AddCmd(cmd *Cmd) {
+	cmd.Root = s
 	s.rootCmd.AddCmd(cmd)
 }
 

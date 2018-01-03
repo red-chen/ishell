@@ -3,3 +3,5 @@
 example/example
 .idea/
 *.iml
+.project
+.settings*

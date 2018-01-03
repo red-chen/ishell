@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"sort"
 	"text/tabwriter"
+	"text/template"
+
+	flag "github.com/spf13/pflag"
 )
 
 // Cmd is a shell command handler.
@@ -30,6 +33,16 @@ type Cmd struct {
 
 	// subcommands.
 	children map[string]*Cmd
+
+	flags *flag.FlagSet
+	// flagErrorBuf contains all error messages from pflag.
+	flagErrorBuf *bytes.Buffer
+
+	Root *Shell
+}
+
+func (c *Cmd) ShellName() string {
+	return c.Root.Name
 }
 
 // AddCmd adds cmd as a subcommand.
@@ -68,29 +81,77 @@ func (c *Cmd) hasSubcommand() bool {
 // HelpText returns the computed help of the command and its subcommands.
 func (c Cmd) HelpText() string {
 	var b bytes.Buffer
-	p := func(s ...interface{}) {
-		fmt.Fprintln(&b)
-		if len(s) > 0 {
-			fmt.Fprintln(&b, s...)
-		}
+
+	//	p := func(s ...interface{}) {
+	//		fmt.Fprintln(&b)
+	//		if len(s) > 0 {
+	//			fmt.Fprintln(&b, s...)
+	//		}
+	//	}
+	//	if c.LongHelp != "" {
+	//		p(c.LongHelp)
+	//	} else if c.Help != "" {
+	//		p(c.Help)
+	//	} else if c.Name != "" {
+	//		p(c.Name, "has no help")
+	//	}
+	//	if c.hasSubcommand() {
+	//		p("Commands:")
+	//		w := tabwriter.NewWriter(&b, 0, 4, 2, ' ', 0)
+	//		for _, child := range c.Children() {
+	//			fmt.Fprintf(w, "\t%s\t\t\t%s\n", child.Name, child.Help)
+	//		}
+	//		w.Flush()
+	//		p()
+	//	}
+
+	var tmpl string
+
+	// shell
+	if c.Name == c.Root.Name {
+		tmpl = `{{.HelpHelpText}}
+
+Usage:
+    {{.ShellName}} [options]
+    
+`
+	} else {
+		tmpl = `{{with (or .LongHelp .Help)}}{{.}}{{end}}
+
+Usage:
+    {{.ShellName}} {{.Name}} [options]
+
+Flags:
+{{ .Flags.FlagUsages }}`
+
 	}
-	if c.LongHelp != "" {
-		p(c.LongHelp)
-	} else if c.Help != "" {
-		p(c.Help)
-	} else if c.Name != "" {
-		p(c.Name, "has no help")
-	}
+
+	c.template(tmpl, &b)
+
 	if c.hasSubcommand() {
-		p("Commands:")
+		fmt.Fprintln(&b, "Commands:")
 		w := tabwriter.NewWriter(&b, 0, 4, 2, ' ', 0)
 		for _, child := range c.Children() {
 			fmt.Fprintf(w, "\t%s\t\t\t%s\n", child.Name, child.Help)
 		}
 		w.Flush()
-		p()
 	}
 	return b.String()
+}
+
+func (c *Cmd) HelpHelpText() string {
+	cmdNames := []string{"help"}
+	helpCmd, _ := c.FindCmd(cmdNames)
+	if helpCmd == nil {
+		panic("Cano not found help command")
+	}
+	return helpCmd.Help
+}
+
+func (c *Cmd) template(tmpl string, buf *bytes.Buffer) {
+	t := template.New("top")
+	template.Must(t.Parse(tmpl))
+	t.Execute(buf, &c)
 }
 
 // findChildCmd returns the subcommand with matching name or alias.
@@ -132,3 +193,27 @@ type cmdSorter []*Cmd
 func (c cmdSorter) Len() int           { return len(c) }
 func (c cmdSorter) Less(i, j int) bool { return c[i].Name < c[j].Name }
 func (c cmdSorter) Swap(i, j int)      { c[i], c[j] = c[j], c[i] }
+
+// TODO from cobra
+
+// Flags returns the complete FlagSet that applies
+// to this command (local and persistent declared here and by all parents).
+func (c *Cmd) Flags() *flag.FlagSet {
+	if c.flags == nil {
+		c.flags = flag.NewFlagSet(c.Name, flag.ContinueOnError)
+		if c.flagErrorBuf == nil {
+			c.flagErrorBuf = new(bytes.Buffer)
+		}
+		c.flags.SetOutput(c.flagErrorBuf)
+	}
+
+	return c.flags
+}
+
+func (c *Cmd) ParseFlags(arguments []string) error {
+	if c.flags != nil {
+		return c.flags.Parse(arguments)
+	}
+	return nil
+
+}

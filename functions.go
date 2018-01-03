@@ -22,17 +22,22 @@ func clearFunc(c *Context) {
 func addDefaultFuncs(s *Shell) {
 	s.AddCmd(&Cmd{
 		Name: "exit",
-		Help: "exit the program",
+		Help: "Exit the program",
+		Func: exitFunc,
+	})
+	s.AddCmd(&Cmd{
+		Name: "quit",
+		Help: "Quit the program",
 		Func: exitFunc,
 	})
 	s.AddCmd(&Cmd{
 		Name: "help",
-		Help: "display help",
+		Help: "Display help",
 		Func: helpFunc,
 	})
 	s.AddCmd(&Cmd{
 		Name: "clear",
-		Help: "clear the screen",
+		Help: "Clear the screen",
 		Func: clearFunc,
 	})
 	s.Interrupt(interruptFunc)
